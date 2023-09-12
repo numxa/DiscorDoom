@@ -13,6 +13,11 @@ dir_post="./post"
 dir_nodes="./nodes"
 dir_tmp="./tmp"
 
+# API endpoint URL in the .env file
+# shellcheck source=/dev/null
+url=$(cat $dir_reply/.env | grep url | awk '{print $3}')
+
+
 t_last=0
 
 while true ; do
@@ -27,24 +32,13 @@ while true ; do
     #id=$(ls $dir_pending | shuf -n 1)
     id=$(ls $dir_pending | head -n 1)
 
+    # Debug print
+    printf '%s' "$id"
+    printf "\n"
+
     if [ ! -z $id ] ; then
         username=$(cat $dir_pending/$id/username)
 
-        if [ -f $dir_pending/$id/error ] ; then
-            msg=$(cat $dir_pending/$id/error)
-            node $dir_reply/reply.js "$id" "@$username \
-            ERROR: $msg" > $dir_pending/$id/result.json
-
-            mv -v $dir_pending/$id $dir_invalid/$id
-
-            continue
-        fi
-
-        t_cur=$(date +%s)
-        if [ "$(($t_cur - $t_last))" -lt 36 ] ; then
-            echo "Only $(($t_cur - $t_last)) seconds since last reply ..."
-            continue
-        fi
 
         depth=$(cat $dir_pending/$id/depth)
         frames=$(cat $dir_pending/$id/frames)
@@ -53,7 +47,7 @@ while true ; do
 
         $wd/parse-history $dir_pending/$id/input-all.txt 350 35 $dir_pending/$id/command_parsed 0 1
 
-        for k in `seq 0 9` ; do
+        for k in $(seq 0 9) ; do
             idx=$k
 
             ts_m=$(( 1000*($idx    ) ))
@@ -72,12 +66,37 @@ while true ; do
             echo "" >> $dir_pending/$id/subs.srt
         done
 
-        node $dir_post/post.js "$id" "@$username \
-Author: @$username | Depth: $depth | New frames: $frames_cur | Total frames: $frames
-Play: ${command_play:0:180}" $dir_pending/$id/record.mp4 $dir_pending/$id/subs.srt > $dir_pending/$id/result.json
+        # Send the video to the Discord using webhook
 
+        # Video file to upload
+        video_file="$dir_pending/$id/record.mp4"
+
+        # JSON payload (optional)
+        payload_json='{"username": "Doomer", 
+                       "content": "Video for user '$username'", 
+                       "avatar_url": "https://wallpapercave.com/wp/wp6540958.jpg"}'
+
+        # Construct the request
+        curl -X POST "$url" \
+        -F "files[0]=@${video_file};type=video/mp4" \
+        -F "payload_json=${payload_json}"
+
+        # Check the response
+        if [ $? -eq 0 ]; then
+            echo "Video uploaded successfully."
+            else
+            echo "Failed to upload video."
+        fi
+        
+        echo "{\"id_str\": \"$id\"}" > "$dir_pending/$id/result.json"
+
+        
         success=0
-        node_id=$(cat $dir_pending/$id/result.json | grep created_at | jq -r .id_str) || success=$?
+        node_id=$(cat $dir_pending/$id/result.json | jq -r .id_str) || success=$?
+
+        # Debug print
+        printf '%s' "$node_id"
+        printf "Debug\n"
 
         if [ "$success" -eq 0 ] ; then
             echo -n "$node_id" > $dir_pending/$id/child_id
@@ -88,7 +107,7 @@ Play: ${command_play:0:180}" $dir_pending/$id/record.mp4 $dir_pending/$id/subs.s
             cp -v $dir_pending/$id/depth $dir_tmp/node_new/depth
             cp -v $dir_pending/$id/frames $dir_tmp/node_new/frames
             echo -n "$id" > $dir_tmp/node_new/parent_id
-            mv -v $dir_tmp/node_new $dir_nodes/$node_id
+            mv -v "$dir_tmp/node_new" "$dir_nodes/$node_id"
 
             mv -v $dir_pending/$id $dir_processed/$id
         else

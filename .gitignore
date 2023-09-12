@@ -8,3 +8,6 @@ parse-history
 *.mp4
 doomreplay
 *package-lock.json
+config.json
+eslintrc.json
+TODO.txt

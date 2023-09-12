@@ -1,7 +1,8 @@
 #!/bin/bash
 
 wd=$(dirname $0)
-cd $wd/../
+#Added "|| exit" so if the cd fails it doesn't do anything harmful
+cd "$wd/../" || exit
 wd=$(pwd)
 
 dir_requests="./requests"
@@ -28,7 +29,7 @@ while true ; do
 
     echo "processing request $id ..."
 
-    cd $dir_processing/$id
+    cd "$dir_processing/$id" || exit
 
     result=0
 
@@ -55,7 +56,8 @@ while true ; do
 
     echo "parent_id=$parent_id"
 
-    $wd/parse-tweet cmd.txt "/play" input-cur.txt frames command_play || result=$?
+    #parse-tweet file compiled manually
+    "$wd/parse-tweet" cmd.txt "/play" input-cur.txt frames command_play || result=$?
 
     if [ ! "$result" -eq 0 ] ; then
         echo "Failed to parse the command" > error
@@ -99,7 +101,7 @@ while true ; do
     cat input-cur.txt >> input-all.txt
 
     ln -sf $dir_doomreplay/.savegame .savegame
-    $dir_doomreplay/doomgeneric \
+    $dir_doomreplay/doomgeneric/doomgeneric \
         -iwad $dir_doomreplay/doom1.wad \
         -input input-all.txt \
         -output record.mp4 \
